@@ -55,6 +55,7 @@ To use a different model, modify the `model_id` parameter to another available C
 
 
 ## Running the Code
+There are two notebook in this repo, in one the outputs are cleared, and in one outputs are reserved. Note that, github do not support the colab generated output of cells, and if you want to read the outputs, you should download the colab notebook and open it on colab. 
 
 The code is written in Google Colab, and it is suggested to run it on Google Colab. To run it locally (preferably with a GPU), install the following dependencies (preferably in a virtual environment):
 
