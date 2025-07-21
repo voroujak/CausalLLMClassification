@@ -1,0 +1,132 @@
+# Report
+
+## Introduction
+
+This is a solution of the problem of detection of misinformation claims. The problem is a classification problem for assigning a label to each sentence. The proposed solution is based on publicly available causal LLM Qwen/Qwen2.5-3B. In this solution, a prompt is created from possible classes, possible examples (used in the second and third stages), and the text to be classified, and the question to generate the class of the given text. The created prompt is passed to the causal model, it receives the prompt, and generates its answer, where the label is extracted from the text. 
+
+## Stages of experiment
+
+This experiment is in three stages. 
+
+- The first stage is zero-shot, where the prompt is created from labels and the queried text (e.g., "0.0: NoClaim, 1-1: ...") I noticed there is a latent order in the codes, so I put them in prompt in order of sorted codes. 
+
+- The second stage is few-shot prompting. Different number o examples can be added to prompt, but here I added to the prompt one example of each class, from training set. There are 18 classes, giving one example of each class make this stage 18-shot approach. Notice that, this number of shots make the prompt long, and hence the generation process longer. However, model is benefiting from seeing one example of each class.
+
+- The third stage is few-shots with leveraging RAG. In this example a RAG approach is used to retrieve the top-k (top-5) most relevant examples to be added to the prompt. Noting that the prompt is similar to the second stage, only instead of random examples from training, the 5 closest samples in the training to the queried text is added to the prompt. For finding the similar examples, all the training set is encoded using a all-MiniLM-L6-v2 model of sentence-transformers is used (it is very small and light-weight, but works effectively for our purpose, and is a proof of concept) and the top-5 sentence that their embedding has the closet cosine distance to the encoded query are retrieved, and used as the examples in the prompts. 
+
+## Results
+Results are reported below. For comparing the zero, few-shots and RAG few-shots, I used sklearn classification-report, which provides precision, recall, F1, and accuracy of all labels. The zero shot performance the model knowledge of task without adding any additional contextual information. The model achieved a poor performance, however we see a high precision and f1-score on the no-claim class. This indicates the knowledge required by this task was not prominent in the training dataset of the chosen LLM, and hence model mostly predicts no-claim for queries, and cannot recognize some of the classes. 
+
+When one-example per class is added to the prompt, model can predict better classes! We see macro F1-score is improved, however the weighted F1-score is dropped. This is due to the fact that dataset is highly imbalanced with many no-claim labeled samples. In this setup, model by looking at examples can find how to recognize other classes, with the cost of not recognizing the majority class (we see a serious drop in the recall of the no-claim class).  
+
+When the examples are created using RAG, we see a better performance than the other two cases. The F1 both in weighted average and macro is incresed, showing RAG effectively could find the relevant examples and guide the LLM. 
+
+# Other Important Notes 
+
+## To run
+The code is written to be run on colab. However, to run in you local machine (better to have GPU), you need to install the followings (better to use a virtual environment): 
+
+
+pip install 'tensorflow[and-cuda]' or follow the Pytorch installation from https://pytorch.org/get-started/locally/ 
+pip install transformers
+pip install sentence-transformers
+pip install scikit-learn
+
+
+## Dataset
+The dataset include "text", "sub-claim", and "sub-claim-code". While the latter two are correspondance labels, the model has to assign the correct label to the given text. The dataset used is available at: https://huggingface.co/datasets/murathankurfali/ClimateEval/tree/main/exeter/sub_claim
+
+## Model
+To change the model, you can change the model_id parameters to available models of CausalLM models in HuggingFace. 
+
+## Assumptions and TODO things
+ 
+- It is assumed that the model generates only one answer, and it is one from the ones in the prompt. 
+
+- The reason I used RAG is that pretrained causal model are generative models that are good at learning from large data in pretraining. For high-performance classification, I would suggest encoders (like a variation of BERT) with top head. 
+
+
+## Results
+
+### Results of Zero-Shot
+
+| Label | Precision | Recall | F1-Score | Support |
+|-------|-----------|--------|----------|---------|
+| 0_0   | 0.90      | 0.54   | 0.68     | 1753    |
+| 1_1   | 0.07      | 0.96   | 0.13     | 51      |
+| 1_2   | 0.50      | 0.14   | 0.22     | 21      |
+| 1_3   | 0.14      | 0.60   | 0.23     | 30      |
+| 1_4   | 0.15      | 0.44   | 0.23     | 68      |
+| 1_6   | 0.33      | 0.04   | 0.07     | 26      |
+| 1_7   | 0.00      | 0.00   | 0.00     | 64      |
+| 2_1   | 0.54      | 0.10   | 0.18     | 124     |
+| 2_3   | 0.00      | 0.00   | 0.00     | 48      |
+| 3_1   | 0.41      | 0.27   | 0.33     | 26      |
+| 3_2   | 0.00      | 0.00   | 0.00     | 49      |
+| 3_3   | 0.00      | 0.00   | 0.00     | 46      |
+| 4_1   | 0.15      | 0.78   | 0.25     | 64      |
+| 4_2   | 0.20      | 0.06   | 0.09     | 34      |
+| 4_4   | 0.00      | 0.00   | 0.00     | 39      |
+| 4_5   | 0.00      | 0.00   | 0.00     | 36      |
+| 5_1   | 0.22      | 0.42   | 0.29     | 224     |
+| 5_2   | 0.00      | 0.00   | 0.00     | 195     |
+
+**Accuracy:** 0.42  
+**Macro avg:** Precision: 0.20, Recall: 0.24, F1: 0.15  
+**Weighted avg:** Precision: 0.61, Recall: 0.42, F1: 0.46
+
+### Results of Few Random Shot
+
+| Label | Precision | Recall | F1-Score | Support |
+|-------|-----------|--------|----------|---------|
+| 0_0   | 0.93      | 0.19   | 0.32     | 1753    |
+| 1_1   | 0.11      | 0.80   | 0.19     | 51      |
+| 1_2   | 0.08      | 0.86   | 0.15     | 21      |
+| 1_3   | 0.64      | 0.23   | 0.34     | 30      |
+| 1_4   | 1.00      | 0.01   | 0.03     | 68      |
+| 1_6   | 0.61      | 0.42   | 0.50     | 26      |
+| 1_7   | 0.33      | 0.08   | 0.13     | 64      |
+| 2_1   | 0.67      | 0.11   | 0.19     | 124     |
+| 2_3   | 0.06      | 0.06   | 0.06     | 48      |
+| 3_1   | 0.50      | 0.27   | 0.35     | 26      |
+| 3_2   | 0.33      | 0.29   | 0.30     | 49      |
+| 3_3   | 0.56      | 0.20   | 0.29     | 46      |
+| 4_1   | 0.27      | 0.12   | 0.17     | 64      |
+| 4_2   | 0.09      | 0.71   | 0.15     | 34      |
+| 4_4   | 0.21      | 0.08   | 0.11     | 39      |
+| 4_5   | 0.21      | 0.56   | 0.31     | 36      |
+| 5_1   | 0.24      | 0.63   | 0.34     | 224     |
+| 5_2   | 0.18      | 0.66   | 0.28     | 195     |
+
+**Accuracy:** 0.27  
+**Macro avg:** Precision: 0.39, Recall: 0.35, F1: 0.23  
+**Weighted avg:** Precision: 0.70, Recall: 0.27, F1: 0.29
+
+
+### Results of Few Shots with RAG
+
+| Label | Precision | Recall | F1-Score | Support |
+|-------|-----------|--------|----------|---------|
+| 0_0   | 0.93      | 0.78   | 0.85     | 1753    |
+| 1_1   | 0.31      | 0.76   | 0.45     | 51      |
+| 1_2   | 0.35      | 0.71   | 0.47     | 21      |
+| 1_3   | 0.59      | 0.87   | 0.70     | 30      |
+| 1_4   | 0.53      | 0.57   | 0.55     | 68      |
+| 1_6   | 0.61      | 0.96   | 0.75     | 26      |
+| 1_7   | 0.79      | 0.77   | 0.78     | 64      |
+| 2_1   | 0.71      | 0.55   | 0.62     | 124     |
+| 2_3   | 0.55      | 0.58   | 0.57     | 48      |
+| 3_1   | 0.50      | 0.54   | 0.52     | 26      |
+| 3_2   | 0.78      | 0.96   | 0.86     | 49      |
+| 3_3   | 0.85      | 0.96   | 0.90     | 46      |
+| 4_1   | 0.29      | 0.55   | 0.38     | 64      |
+| 4_2   | 0.30      | 0.50   | 0.38     | 34      |
+| 4_4   | 0.55      | 0.56   | 0.56     | 39      |
+| 4_5   | 0.52      | 0.67   | 0.59     | 36      |
+| 5_1   | 0.55      | 0.73   | 0.63     | 224     |
+| 5_2   | 0.56      | 0.55   | 0.56     | 195     |
+
+**Accuracy:** 0.74  
+**Macro avg:** Precision: 0.57, Recall: 0.70, F1: 0.62  
+**Weighted avg:** Precision: 0.79, Recall: 0.74, F1: 0.75
+
